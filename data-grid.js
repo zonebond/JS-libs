@@ -11,8 +11,6 @@
     datagrid.prototype.init = function(options)
     {
         this.selector = options['selector'];
-
-
     };
 
     datagrid.prototype.built = function()
@@ -53,6 +51,7 @@
                 var field = $($thead[col_index]).attr('data-field');
                 var value = item[field];
                 var tdata = $tdate.clone();
+
                 if(field == "name")
                 {
                     tdata.html("<a href='javascript: alert(\"" + value + "\");'>" + value + "</a>");
@@ -61,6 +60,7 @@
                 {
                     tdata.text(value || "XXXXX");
                 }
+
                 tdata.appendTo($row);
             }
             $row.appendTo($tbody);
@@ -70,9 +70,17 @@
 
     //attach to
     win._datagrid = {
-        init: function(selector)
+        init: function()
         {
-            return new datagrid(selector);
+            var selector = arguments[0];
+            var provider = arguments[1];
+            var dg = new datagrid(selector);
+            if(provider)
+            {
+                dg.dataProvdier = provider;
+                dg.built();
+            }
+            return dg;
         }
     };
 

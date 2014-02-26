@@ -106,7 +106,7 @@
         }
     };
 
-    win.CTDZ = function()
+    win.data_zipper = function()
     {
         var type  = arguments[0],
             title = arguments[1],
