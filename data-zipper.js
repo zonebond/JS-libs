@@ -13,36 +13,136 @@
         return array;
     }
 
+    var metrices = function()
+    {
+        var time = new Date();
+        this.option = {
+            "tid": "XXX1-000X-0001",
+            "metricid": "metrics_id",
+            "metricname": "metrics_name",
+            "unit":"",
+            "period":"",
+            "metriclist":[
+                {
+                    time: time.getHours() + ":" + time.getMinutes() + ":" + time.getSeconds(),
+                    statistic: parseInt(Math.random() * 10)
+                }]
+        };
+    }
+
+    var warnings = function()
+    {
+        this.option = [
+            {
+                name: '系统问题',
+                level: '警告',
+                desc: '系统出问题啦！',
+                code: '#00010'
+            },
+            {
+                name: '系统问题',
+                level: '警告',
+                desc: '系统出问题啦！',
+                code: '#00010'
+            },
+            {
+                name: '系统问题',
+                level: '警告',
+                desc: '系统出问题啦！',
+                code: '#00010'
+            },
+            {
+                name: '系统问题',
+                level: '警告',
+                desc: '系统出问题啦！',
+                code: '#00010'
+            },
+            {
+                name: '系统问题',
+                level: '警告',
+                desc: '系统出问题啦！',
+                code: '#00010'
+            },
+            {
+                name: '系统问题',
+                level: '警告',
+                desc: '系统出问题啦！',
+                code: '#00010'
+            },
+            {
+                name: '系统问题',
+                level: '警告',
+                desc: '系统出问题啦！',
+                code: '#00010'
+            }
+        ];
+    };
+
     var components = function()
     {
         this.option = [
             {
                 name: 'tomcat',
-                desc: 'tomcat 6.0'
+                type: 'Service',
+                desc: 'Apache Tomcat Application Server',
+                template: 'slave',
+                cpu: '2',
+                memory: '512',
+                network: 'network'
             },
             {
                 name: 'apache',
-                desc: 'apache server'
+                type: 'Service',
+                desc: 'Apache HTTPD WEB service.',
+                template: 'slave',
+                cpu: '2',
+                memory: '1024',
+                network: 'network2'
             },
             {
                 name: 'mysql',
-                desc: 'mysql 5.5'
+                type: 'Service',
+                desc: 'MySQL open source database',
+                template: 'paas',
+                cpu: '2',
+                memory: '512',
+                network: 'network2'
             },
             {
-                name: 'sql server',
-                desc: 'sqlserver 2005'
+                name: 'PHP',
+                type: 'Service',
+                desc: 'php running',
+                template: '',
+                cpu: '2',
+                memory: '512',
+                network: 'network1'
             },
             {
-                name: 'oracle',
-                desc: 'oracle'
+                name: 'Hadoop',
+                type: 'Service',
+                desc: 'SkyForm Bigdata platform management node(SFHM)',
+                template: '',
+                cpu: '1',
+                memory: '1024',
+                network: 'network1'
             },
             {
-                name: 'hadoop',
-                desc: 'hadoop'
+                name: 'LAMP',
+                type: 'Service',
+                desc: 'LAMP (Linux Apache MySQL PHP) suite',
+                template: '',
+                cpu: '1',
+                memory: '512',
+                network: 'network1'
             },
             {
-                name: 'redhat',
-                desc: 'redhat'
+                name: 'RedHat',
+                type: 'Compute',
+                desc: 'RedHat Enterprise Linux 6.0',
+                template: '',
+                cpu: '1',
+                memory: '4096',
+                network: ''
             }
         ];
     };
@@ -123,6 +223,14 @@
 
             case 'components':
                 opt = new components();
+                break;
+
+            case 'warnings':
+                opt = new warnings();
+                break;
+
+            case 'metrics':
+                opt = new metrices();
                 break;
 
             default :

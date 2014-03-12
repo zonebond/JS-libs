@@ -3,9 +3,39 @@
  */
 (function(win)
 {
+    function isFunction( obj ) {
+        return typeof obj == 'function';
+    }
+
     function datagrid(selector)
     {
         this.init({selector: selector});
+    }
+
+    datagrid.prototype.on = function(type, handler)
+    {
+        if(!this.event_map)
+        {
+            this.event_map = {};
+        }
+        this.event_map[type] = handler;
+    }
+
+    datagrid.prototype.dispatchEvent = function()
+    {
+        if(!this.event_map)
+        {
+            return;
+        }
+
+        var type = arguments[0];
+        var data = arguments[1];
+
+        var event = this.event_map[type];
+        if(isFunction(event))
+        {
+            event.call(null, data);
+        }
     }
 
     datagrid.prototype.init = function(options)
@@ -41,6 +71,8 @@
             return;
         }
 
+        this.fields = [];
+
         var len = comps.length;
         for(var row_index = 0; row_index < len; row_index++)
         {
@@ -48,25 +80,63 @@
             var $row = $trows.clone();
             for(var col_index = 0; col_index < $thead.length; col_index++)
             {
-                var field = $($thead[col_index]).attr('data-field');
+                var $th = $($thead[col_index]);
+                var field;
+
+                if(!this.fields[col_index])
+                {
+                    field = $th.attr('data-field');
+                    this.fields[col_index] = field;
+                }
+                else
+                {
+                    field = this.fields[col_index];
+                }
+
+                var color = $th.attr('color') || 'black';
                 var value = item[field];
                 var tdata = $tdate.clone();
 
                 if(field == "name")
                 {
-                    tdata.html("<a href='javascript: alert(\"" + value + "\");'>" + value + "</a>");
+                    $("<a >" + value + "</a>").css('color', color).appendTo(tdata);
                 }
                 else
                 {
-                    tdata.text(value || "XXXXX");
+                    tdata.html(value || "").css('color', color);
                 }
-
                 tdata.appendTo($row);
             }
             $row.appendTo($tbody);
         }
+
+        this.configEvent(this, $tbody);
     };
 
+    datagrid.prototype.configEvent = function(prototype, dom)
+    {
+        dom.bind('click', function(event)
+        {
+            var $target = $(event.target);
+            if($target && $target.length != 0)
+            {
+                var td = $target.parent('tr').length == 0 ? $target.parents('td') : $target;
+                var parent_tr = td.parents('tr');
+                var parent_tbody = parent_tr.parents('tbody');
+
+                var itemData =
+                {
+                    $cell: td,
+                    col_index: parent_tr.children().index(td),
+                    row_index: parent_tbody.children().index(parent_tr)
+                };
+                itemData.field = prototype.fields[itemData.col_index];
+                itemData.item  = prototype.dataProvdier[itemData.row_index];
+
+                prototype.dispatchEvent('item-click', itemData);
+            }
+        });
+    }
 
     //attach to
     win._datagrid = {
