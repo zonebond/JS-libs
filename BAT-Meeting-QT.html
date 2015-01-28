@@ -10,37 +10,65 @@
 
 <script>
 
-    function addEvent(elem, type, handler)
+    var addEvent = function(type, handler)
     {
-        if (elem.addEventListener)
+        return function(elem, type, handler)
         {
-            elem.addEventListener(type, handler, false);
-        }
-        else if (elem.attachEvent)
+            if (elem.addEventListener)
+            {
+                elem.addEventListener(type, handler, false);
+            }
+            else if (elem.attachEvent)
+            {
+                elem['temp' + type] = handler;
+                elem.attachEvent('on' + type, handler);
+            }
+            else
+            {
+                elem['on' + type] = handler;
+            }
+        }(this, type, handler);
+    };
+
+    var delEvent = function(type, handler)
+    {
+        return function(elem, type, handler)
         {
-            elem['temp' + type] = handler;
-            elem.attachEvent('on' + type, handler);
-        }
-        else
-        {
-            elem['on' + type] = handler;
-        }
+            if(elem.removeEventListener)
+            {
+                elem.removeEventListener(type, handler, false);
+            }
+            else if(elem.detachEvent)
+            {
+                elem.detachEvent('on' + type, handler);
+            }
+            else
+            {
+                elem['on' + type] = null;
+                delete elem['on' + type];
+            }
+        }(this, type, handler);
     }
 
-    function delEvent(elem, type, handler)
+    try
     {
-        if(elem.removeEventListener)
+        if(!EventTarget.prototype.addEvent)
         {
-            elem.removeEventListener(type, handler, false);
+            EventTarget.prototype.addEvent = addEvent;
+            EventTarget.prototype.delEvent = addEvent;
         }
-        else if(elem.detachEvent)
+    }
+    catch (ex)
+    {
+        if(!Element.prototype.addEvent)
         {
-            elem.detachEvent('on' + type, handler);
-        }
-        else
-        {
-            elem['on' + type] = null;
-            delete elem['on' + type];
+            Element.prototype.addEvent  = addEvent;
+            Window.prototype.addEvent   = addEvent;
+            Document.prototype.addEvent = addEvent;
+
+            Element.prototype.delEvent   = addEvent;
+            Window.prototype.delEvent   = addEvent;
+            Document.prototype.delEvent = addEvent;
         }
     }
 
@@ -49,8 +77,8 @@
       * 传递函数给whenReady()
       * 当文档解析完毕且为操作准备就绪时，函数作为document的方法调用
       */
-    var whenReady = (function()
-    {        //这个函数返回whenReady()函数
+    var whenReady = (function() //这个函数返回whenReady()函数
+    {
         var funcs = [];       //当获得事件时，要运行的函数
         var ready = false;     //当触发事件处理程序时,切换为true
 
@@ -69,7 +97,14 @@
             //以防这些函数的调用可能会导致注册更多的函数
             for(var i=0; i<funcs.length; i++)
             {
-                funcs[i].call(document);
+                try
+                {
+                    funcs[i].call(document);
+                }
+                catch (ex)
+                {
+                    if(console) console.log(ex);
+                }
             }
             //事件处理函数完整执行,切换ready状态, 并移除所有函数
             ready = true;
@@ -103,16 +138,19 @@
 
     whenReady(function()
     {
-        addEvent(document.getElementById("btn"), 'click', function(event)
+        var btn = document.getElementById("btn");
+        btn.addEvent('click', function(event)
         {
-            Function.prototype.bind()
-
             alert('===');
 
             var elem = event.target || event.srcElement,
-                    type = event.type,
-                    handler =elem['temp' + type];
-            delEvent(elem, type, handler);
+                type = event.type;
+            elem.delEvent(type, elem['temp' + type]);
+        });
+
+        window.addEvent('click', function(event)
+        {
+            alert(event+"");
         })
     });
 
