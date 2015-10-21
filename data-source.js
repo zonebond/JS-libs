@@ -19,7 +19,8 @@
             var d = {},
                 p = this.prototype;
             this.prototype.constructor = parent;
-            this.method('uber', function uber(name) {
+            this.method('uber', function uber(name)
+            {
                 if (!(name in d)) {
                     d[name] = 0;
                 }
@@ -46,6 +47,10 @@
     }
 
     /*************  sugar end *************/
+
+    function isFunction( obj ) {
+        return typeof obj == 'function';
+    }
 
 
     /*************  data source *************/
@@ -93,7 +98,7 @@
     {
         if(typeof this.render == 'string')
         {
-            this.render = render[this.render];
+            this.render = factory[this.render];
         }
         this.render = this.render.newInstance();
         this.render.owner = this;
@@ -155,6 +160,17 @@
         return this;
     });
 
+    // manipulate original
+    DataSource.method('dataProvider', function(provider)
+    {
+        if(provider === undefined)
+        {
+            return;
+        }
+
+        this.resultHandler.call(this, provider);
+    });
+
     //When the ajax request success calls
     DataSource.method('resultHandler', function(result)
     {
@@ -194,78 +210,416 @@
     //Config Adapters
     var adapters = {};
 
-    if(!win.render)
+    var doc = win.document,
+        isOpera = typeof opera !== 'undefined' && opera.toString() === '[object Opera]',
+        isBrowser = !!(typeof window !== 'undefined' && navigator && doc),
+        readyRegExp = isBrowser && navigator.platform === 'PLAYSTATION 3' ? /^complete$/ : /^(complete|loaded)$/;
+
+    if(!win.doExe)
+    {
+        win.doExe = function(something, boss)
+        {
+            return eval("(function(){ \n" + something + "\n }).call(boss)");
+        };
+    }
+
+    function dequeuing(queue, clear)
+    {
+        return {
+            queue: queue,
+            clear: clear,
+            clean: function()
+            {
+                if(this.clear && isFunction(this.clear))
+                {
+                    this.clear.call(this);
+                }
+            },
+            parallel: function(every)
+            {
+                if(!isFunction(every) || !this.queue)
+                {
+                    return;
+                }
+
+                var who = this;
+                var len = who.queue.length;
+                for(var i = 0; i < len; i++)
+                {
+                    every.call(who, who.queue[i]);
+                }
+            },
+            sequence: function(every)
+            {
+                if(!isFunction(every) || !this.queue)
+                {
+                    return;
+                }
+
+                var who = this;
+                while(who.queue.length)
+                {
+                    every.call(who, who.queue.shift());
+                }
+
+                who.clean();
+            },
+            next: function(every)
+            {
+                if(!isFunction(every) || !this.queue)
+                {
+                    return;
+                }
+
+                var who = this;
+                if(who.queue.length)
+                {
+                    every.call(who, who.queue.shift());
+                }
+                else
+                {
+                    who.clean();
+                }
+            }
+        };
+    }
+
+    var CacheCode = function()
+    {
+        var name = arguments[0], code = arguments[1];
+        try
+        {
+            if(/http:\/\//.test(name))
+            {
+                name = (name+'').split('/').splice(3).join('/')
+            }
+
+            try
+            {
+                if(!window.top.__CacheCode__)
+                {
+                    window.top.__CacheCode__ = {};
+                }
+
+                if(code == undefined)
+                {
+                    var cached = window.top.__CacheCode__[name];
+                    if(cached)return cached;
+                }
+                else
+                {
+                    window.top.__CacheCode__[name] = code;
+                }
+            }catch(ex){$LOG(" = CACHE ERROR = CrossDomain!!!")}
+
+            if(window.localStorage)
+            {
+                if(code == undefined)
+                {
+                    return window.localStorage.getItem(name);
+                }
+                else
+                {
+                    window.localStorage.setItem(name+"", code);
+                }
+            }
+        }
+        catch(ex)
+        {
+            $LOG(" = CACHE ERROR = " + name + "  | " + code.length);
+
+            if(arguments.length == 1)
+            {
+                return null;
+            }
+        }
+    };
+
+    if(window.render == undefined)
     {
         var factory = {},
             configs = {},
-            currentlyAddingScript,
             ready_handler;
 
-        factory.import = function(name, uri)
+        factory.script = function(src)
         {
-            var script = document.createElement( 'script' );
-            script.setAttribute('data-require-id', name);
-            script.src = uri;
-            script.async = true;
-            if (script.readyState)
+            return {
+                attrs: arguments[1] || null,
+                alive: function(callback)
+                {
+                    // instance script
+                    var node = doc.createElement('script');
+                    node.async = true;
+                    node.type = "text/javascript";
+
+                    // set attributes
+                    var attrs = this.attrs;
+                    if(attrs)
+                    {
+                        var len = attrs.length;
+                        for (var i = 0; i < len; i++) {
+                            var attr = attrs[i];
+                            node.setAttribute(attr.name, attr.value);
+                        }
+                    }
+
+                    node.callback = callback;
+                    node.args = arguments[1];
+
+                    // attachEvent
+                    if (node.attachEvent && !(node.attachEvent.toString && node.attachEvent.toString().indexOf('[native code') < 0) && !isOpera)
+                    {
+                        node.attachEvent('onreadystatechange', this.hands);
+                    }
+                    else
+                    {
+                        node.addEventListener('load', this.hands, false);
+                    }
+
+                    node.src = src;
+                    doc.getElementsByTagName('head')[0].appendChild(node);
+                },
+                hands: function(event)
+                {
+                    var target = event.currentTarget || event.srcElement;
+                    if (event.type === 'load' || (readyRegExp.test(target.readyState)))
+                    {
+                        if(target.callback)
+                        {
+                            target.callback.call(target);
+                        }
+                    }
+                }
+            };
+        };
+
+        factory.httpLoader = function(href)
+        {
+            return {
+                cache: arguments[1] == undefined ? true : arguments[1],
+                href: href,
+                alive: function(callback)
+                {
+                    this.callback = callback;
+
+                    var local_cache = CacheCode(href);
+
+                    if(local_cache)
+                    {
+                        this.response = local_cache;
+                        return this.handle();
+                    }
+
+                    // get remote source
+                    var loader, who = this;
+
+                    if(win.XMLHttpRequest)
+                    {
+                        loader = new XMLHttpRequest();
+                    }
+                    else if(win.ActiveXObject)
+                    {
+                        try
+                        {
+                            loader = new ActiveXObject("Msxml2.XMLHTTP");
+                        }
+                        catch(ex)
+                        {
+                            try
+                            {
+                                loader = new ActiveXObject("Microsoft.XMLHTTP");
+                            }
+                            catch (ex) {}
+                        }
+                    }
+
+                    if(loader)
+                    {
+                        this.loader = loader;
+
+                        loader.onreadystatechange = function(evt)
+                        {
+                            if(loader.readyState == 4 && loader.status == 200)
+                            {
+                                var code = loader.responseText;
+
+                                if(who.cache)
+                                {
+                                    CacheCode(who.href, code);
+                                }
+
+                                who.response = code;
+
+                                loader = null;
+                                code = null;
+                                return who.handle();
+                            }
+                        };
+
+                        loader.error = function(evt)
+                        {
+                            loader = null;
+                            return null;
+                        };
+
+                        loader.open("POST", href, true);
+                        loader.send();
+                    }
+                },
+                handle: function()
+                {
+                    if(this.callback && isFunction(this.callback))
+                    {
+                        this.callback.call(this);
+                    }
+                }
+            };
+        };
+
+        factory.task_pool = [];
+        factory.trigger_tasks = function()
+        {
+            var tasks = factory.task_pool,
+                index = 0;
+            while(index < tasks.length)
             {
-                script.onreadystatechange = loadedListener;
+                if(tasks[index].process())
+                {
+                    tasks.splice(index, 1);
+                    continue;
+                }
+                index++;
             }
-            else
+        };
+
+        factory.importing = function(task)
+        {
+            if(!task) return;
+
+            factory.task_pool.push(task);
+
+            if(task.queue.length == 0)
             {
-                script.onload = loadedListener;
+                factory.trigger_tasks();
+                return;
             }
-            script.onerror = loadErrorLinstener;
 
-            appendScript(script)
-
-            function loadedListener()
+            var nodes = [];
+            var queue = task.queue;
+            var num_queue = queue.length;
+            for(var i = 0; i < num_queue; i++)
             {
+                var render = queue[i];
+                var node = factory.httpLoader(render.path);
 
-                var name = script.getAttribute("data-require-id");
-                /**
-
-                **/
+                nodes.push(node);
             }
 
-            function loadErrorLinstener()
+            dequeuing(nodes).parallel(function(node)
             {
-                var name = script.getAttribute("data-require-id");
-                alert("Error : 【" + name + "】 load failure!");
-            }
+                node.alive(function()
+                {
+                    try
+                    {
+                        doExe(this.response, win);
+                    }
+                    catch(ex){}
 
-            function appendScript(script)
-            {
-                currentlyAddingScript = script;
+                    factory.trigger_tasks();
+                });
+            });
 
-                var doc = document;
-                (doc.getElementsByTagName('head')[0] || doc.body).appendChild( script );
-
-                currentlyAddingScript = null;
-            }
         };
 
         factory.config = function(conf)
         {
+            var task = {conf: conf, queue: []};
             for(var name in conf)
             {
                 var conf_obj = configs[name];
 
-                if(!conf_obj)
+                if(conf_obj)
                 {
-                    conf_obj = {};
+                   continue;
                 }
-                conf_obj['path']   = conf[name];
-                conf_obj['status'] = "_invalidate_";
+
+                conf_obj = {};
+                conf_obj['name'] = name;
+                conf_obj['path'] = factory.parse_path(conf[name]);
 
                 configs[name] = conf_obj;
+
+                task.queue.push(conf_obj);
             }
+
+            var handler = arguments[1];
+            if(handler)
+            {
+                task.handle = handler;
+                task.process = function()
+                {
+                    if(!factory.list) return false;
+
+                    var tot = 0, cou = 0;
+                    for(var name in this.conf)
+                    {
+                        tot++;
+                        if(!factory.validation(name))
+                        {
+                            continue;
+                        }
+                        cou++;
+                    }
+
+                    if(tot == cou && this.handle)
+                    {
+                        this.handle.call(null);
+                        return true;
+                    }
+
+                    return false;
+                };
+                factory.importing(task);
+            }
+        };
+
+        factory.validation = function(name)
+        {
+            if(!factory.list)
+            {
+                return false;
+            }
+
+            if(factory.list[name] || factory.list[name.replace(/_/g, '-')])
+            {
+                return true;
+            }
+
+            return false;
+        };
+
+        factory.parse_path = function(path)
+        {
+            if(!path || path == "" || !script)
+            {
+                return path;
+            }
+
+            var namespace = "renders:";
+
+            return path.indexOf(namespace) == 0 ? script.uri.replace("data-source.js", "renderers/" + path.replace(namespace, "")) : path;
         };
 
         factory.def = function(name, define)
         {
-            configs[name]['status'] = "_ready_";
             factory[name] = define;
+
+            if(!factory.list)
+            {
+                factory.list = {};
+            }
+
+            factory.list[name] = define;
 
             if(isFunction(define))
             {
@@ -277,22 +631,6 @@
                     };
                 }
             }
-
-            var total_count = 0;
-            var ready_count = 0;
-            for(var key in configs)
-            {
-                total_count++;
-                if(configs[key]['status'] == "_ready_")
-                {
-                    ready_count++;
-                }
-            }
-
-            if(total_count == ready_count && isFunction(ready_handler))
-            {
-                ready_handler.call(null);
-            }
         };
 
         var data_source_path = "";
@@ -300,13 +638,17 @@
         for(var i = 0; i < scripts.length; i++)
         {
             var script = scripts[i];
-            if(script.src.indexOf('data-source.js') != -1)
+            if(script.uri.indexOf('data-source.js') != -1)
             {
-                data_source_path = script.src;
+                data_source_path = script.uri;
                 break;
             }
         }
 
+        if(data_source_path == "")
+        {
+            script = null;
+        }
 
         factory.ready = function(handler)
         {
@@ -317,26 +659,38 @@
 
             ready_handler = handler;
 
+            var all_renders = [];
             for(var name in configs)
             {
-                var conf = configs[name];
-                if(conf['status'] == "_invalidate_")
-                {
-                    factory.import(name, configs[name].path);
-                }
+                all_renders.push(configs[name]);
             }
-        }
 
-        factory.config({
-            echart_line_renderer : script.src.replace("utils/data-source.js", "renderers/echart_line_renderer.js")
-        });
+            factory.importing({conf: configs, queue: all_renders, handle: handler, process: function()
+            {
+                if(!factory.list) return false;
+
+                var tot = 0, cou = 0;
+                for(var name in this.conf)
+                {
+                    tot++;
+                    if(!factory.validation(name))
+                    {
+                        continue;
+                    }
+                    cou++;
+                }
+
+                if(tot == cou && this.handle)
+                {
+                    this.handle.call(null);
+                    return true;
+                }
+
+                return false;
+            }});
+        };
 
         win.render = factory;
-    }
-
-
-    function isFunction( obj ) {
-        return typeof obj == 'function';
     }
 
 })(window);
